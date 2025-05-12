@@ -1,6 +1,6 @@
+const { isAuthenticated, isAdmin } = require("./utils");
 
 
-require("./utils.js");
 require("dotenv").config();
 const express = require("express");
 const session = require("express-session");
@@ -11,6 +11,8 @@ const saltRounds = 12;
 
 const port = process.env.PORT || 3000;
 const app = express();
+app.set("view engine", "ejs");
+
 
 const expireTime = 1 * 60 * 60 * 1000; // 1 hour
 
@@ -46,35 +48,33 @@ app.use(
 app.use(express.static(__dirname + "/public"));
 
 app.get("/", (req, res) => {
-  if (!req.session.authenticated) {
-    res.send(`
-      <h1>Welcome!</h1>
-      <a href="/signup">Sign Up</a> | <a href="/login">Log In</a>
-    `);
-  } else {
-    res.send(`
-      <h1>Hello, ${req.session.name}!</h1>
-      <a href="/members">Members Area</a> | <a href="/logout">Logout</a>
-    `);
-  }
+  res.render("index", {
+    authenticated: req.session.authenticated,
+    name: req.session.name,
+    user_type: req.session.user_type,
+  });
 });
 
+
 app.get("/signup", (req, res) => {
-  res.send(`
-    <form action="/signup" method="post">
-      Name: <input name="name"><br>
-      Email: <input name="email"><br>
-      Password: <input name="password" type="password"><br>
-      <button>Sign Up</button>
-    </form>
-  `);
+  const error = req.session.error;
+  req.session.error = null;
+  res.render("signup", {
+    authenticated: req.session.authenticated,
+    user_type: req.session.user_type,
+    error,
+  });
 });
+
+
 
 app.post("/signup", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
-    return res.send("All fields required. <a href='/signup'>Try again</a>");
+    req.session.error = "All fields are required.";
+    return res.redirect("/signup");
   }
+  
 
   const schema = Joi.object({
     name: Joi.string().max(30).required(),
@@ -83,11 +83,20 @@ app.post("/signup", async (req, res) => {
   });
 
   const { error } = schema.validate({ name, email, password });
-  if (error) return res.send("Validation failed. <a href='/signup'>Try again</a>");
+  if (error) {
+    req.session.error = "Validation failed. Please check your input.";
+    return res.redirect("/signup");
+  }
+  
 
   const hashed = await bcrypt.hash(password, saltRounds);
-  await userCollection.insertOne({ name, email, password: hashed });
-
+  await userCollection.insertOne({
+    name,
+    email,
+    password: hashed,
+    user_type: "user"  // new default role
+  });
+  
   req.session.authenticated = true;
   req.session.name = name;
   req.session.email = email;
@@ -95,14 +104,15 @@ app.post("/signup", async (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  res.send(`
-    <form action="/login" method="post">
-      Email: <input name="email"><br>
-      Password: <input name="password" type="password"><br>
-      <button>Login</button>
-    </form>
-  `);
+  const error = req.session.error;
+  req.session.error = null;
+  res.render("login", {
+    authenticated: req.session.authenticated,
+    user_type: req.session.user_type,
+    error,
+  });
 });
+
 
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -112,37 +122,83 @@ app.post("/login", async (req, res) => {
   });
 
   const { error } = schema.validate({ email, password });
-  if (error) return res.send("Invalid input. <a href='/login'>Try again</a>");
-
+  if (error) {
+    req.session.error = "Invalid input.";
+    return res.redirect("/login");
+  }
+  
   const user = await userCollection.findOne({ email });
   if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.send("Invalid credentials. <a href='/login'>Try again</a>");
+    req.session.error = "Invalid email or password.";
+    return res.redirect("/login");
   }
+  
 
   req.session.authenticated = true;
   req.session.name = user.name;
   req.session.email = email;
+  req.session.user_type = user.user_type;
   res.redirect("/members");
 });
 
 app.get("/members", (req, res) => {
   if (!req.session.authenticated) return res.redirect("/");
+
   const images = ["cat1.jpg", "cat2.jpg", "cat3.jpg"];
-  const random = images[Math.floor(Math.random() * images.length)];
-  res.send(`
-    <h1>Hello, ${req.session.name}!</h1>
-    <img src="/${random}" style="width:300px;"><br>
-    <a href="/logout">Logout</a>
-  `);
+  res.render("members", {
+    authenticated: req.session.authenticated,
+    name: req.session.name,
+    user_type: req.session.user_type,
+    images,
+  });
 });
+
 
 app.get("/logout", (req, res) => {
   req.session.destroy();
   res.redirect("/");
 });
 
+
+
+
+
+
+
+// Admin dashboard to view all users
+app.get("/admin", isAuthenticated, isAdmin, async (req, res) => {
+  const users = await userCollection.find().toArray();
+  res.render("admin", {
+    authenticated: true,
+    user_type: req.session.user_type,
+    name: req.session.name,
+    users,
+  });
+});
+
+// Promote user to admin
+app.get("/promote/:email", isAuthenticated, isAdmin, async (req, res) => {
+  await userCollection.updateOne(
+    { email: req.params.email },
+    { $set: { user_type: "admin" } }
+  );
+  res.redirect("/admin");
+});
+
+// Demote admin to user
+app.get("/demote/:email", isAuthenticated, isAdmin, async (req, res) => {
+  await userCollection.updateOne(
+    { email: req.params.email },
+    { $set: { user_type: "user" } }
+  );
+  res.redirect("/admin");
+});
+
 app.get("*", (req, res) => {
-  res.status(404).send("Page not found - 404");
+  res.status(404).render("404", {
+    authenticated: req.session.authenticated,
+    user_type: req.session.user_type,
+  });
 });
 
 app.listen(port, () => {

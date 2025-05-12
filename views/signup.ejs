@@ -1,0 +1,29 @@
+
+<%- include("templates/header", { authenticated, user_type }) %>
+
+<h2>Sign Up</h2>
+
+<% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+<form action="/signup" method="post" class="w-50 mx-auto">
+  <div class="mb-3">
+    <label class="form-label">Name:</label>
+    <input class="form-control" name="name" required />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Email:</label>
+    <input class="form-control" type="email" name="email" required />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Password:</label>
+    <input class="form-control" type="password" name="password" required />
+  </div>
+
+  <button class="btn btn-primary">Sign Up</button>
+</form>
+
+<%- include("templates/footer") %>

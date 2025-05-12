@@ -1,0 +1,6 @@
+<%- include("templates/header", { authenticated, user_type }) %>
+
+<h1>Welcome<% if (authenticated) { %>, <%= name %><% } %>!</h1>
+<p>This is your home page using EJS and Bootstrap.</p>
+
+<%- include("templates/footer") %>

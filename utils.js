@@ -6,3 +6,17 @@ global.abs_path = function(path) {
 global.include = function(file) {
 	return require(abs_path('/' + file));
 }
+
+module.exports = {
+	isAuthenticated: (req, res, next) => {
+	  if (!req.session.authenticated) return res.redirect("/login");
+	  next();
+	},
+	isAdmin: (req, res, next) => {
+	  if (req.session.user_type !== "admin") {
+		return res.status(403).send("Forbidden - Admins only");
+	  }
+	  next();
+	},
+  };
+  
