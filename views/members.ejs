@@ -3,8 +3,14 @@
 <h2>Welcome to the Members Page</h2>
 
 <p>Hello, <strong><%= name %></strong>! Here's your cat of the day:</p>
-<img src="/<%= images[Math.floor(Math.random() * images.length)] %>" style="width:300px;" class="img-fluid rounded" />
-
+<div class="row">
+    <% images.forEach(image => { %>
+      <div class="col-md-4 mb-3">
+        <img src="/<%= image %>" class="img-fluid rounded shadow" style="width:100%;">
+      </div>
+    <% }) %>
+  </div>
+  
 <a href="/logout" class="btn btn-danger mt-3">Logout</a>
 
 <%- include("templates/footer") %>
